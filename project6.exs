@@ -7,8 +7,13 @@ defmodule BinopC do
     @enforce_keys [:op, :l, :r]
     defstruct [:op, :l, :r]
 end
+
+defmodule ExprC do
+    @type exprC :: NumC | BinopC
+end
     
 defmodule Interpreter do
+    @spec interp(ExprC) :: integer()
     def interp(expression) do
         case expression do
             %NumC{} -> expression.n
