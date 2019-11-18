@@ -89,68 +89,110 @@ defmodule BinopC do
     @enforce_keys [:op, :l, :r]
     defstruct [:op, :l, :r]
 end
+
+defmodule Env do
+    @type env :: %{atom => [Value]}
+
+    @spec createEnv() :: env
+    def createEnv() do
+        %{
+            +: %PrimV{op: &Interpreter.myPlus/1},
+            -: %PrimV{op: &Interpreter.mySub/1},
+            *: %PrimV{op: &Interpreter.myMult/1},
+            /: %PrimV{op: &Interpreter.myDiv/1}
+        }
+    end
+end
     
 defmodule Interpreter do
-    @spec interp(ExprC) :: Value
-    def interp(expression) do
+    @spec interp(ExprC, Env) :: Value
+    def interp(expression, env) do
         case expression do
             %NumC{} -> %NumV{n: expression.n}
             %StringC{} -> %StringV{s: expression.s}
-            %BinopC{op: op, l: l, r: r} -> %NumV{n: getOp(op).(interp(l).n, interp(r).n)}
+            %IdC{} -> env[expression.s]
+            %LamC{} -> %ClosV{params: expression.params, body: expression.body, env: env}
+            %AppC{} -> 
+                fd = interp(expression.fun, env)
+                case fd do
+                    %PrimV{} -> fd.op.(Enum.map(expression.args, fn arg -> interp(arg, env) end))
+                end
             _ -> throw "Invalid expression"
         end
     end
 
-    def getOp(op) do
-        case op do
-            :+ -> &myPlus/2
-            :- -> &mySub/2
-            :* -> &myMult/2
-            :/ -> &myDiv/2
+    @spec myPlus(list(Value)) :: Value
+    def myPlus(args) do   
+        if length(args) == 2 do         
+            %NumV{n: List.first(args).n + List.last(args).n}
         end
     end
 
-    def myPlus(l, r) do
-        l + r
+    @spec mySub(list(Value)) :: Value
+    def mySub(args) do   
+        if length(args) == 2 do         
+            %NumV{n: List.first(args).n - List.last(args).n}
+        end
     end
 
-    def mySub(l, r) do
-        l - r
+    @spec myMult(list(Value)) :: Value
+    def myMult(args) do   
+        if length(args) == 2 do         
+            %NumV{n: List.first(args).n * List.last(args).n}
+        end
     end
 
-    def myMult(l, r) do
-        l * r
-    end
-
-    def myDiv(l, r) do
-        l / r
+    @spec myDiv(list(Value)) :: Value
+    def myDiv(args) do   
+        if length(args) == 2 and List.last(args).n != 0 do         
+            %NumV{n: List.first(args).n / List.last(args).n}
+        end
     end
 end
 
 defmodule Main do
     use ExUnit.Case
 
-    test "numC" do
-        assert Interpreter.interp(%NumC{n: 1}) == %NumV{n: 1}
+    test "NumC" do
+        assert Interpreter.interp(%NumC{n: 1}, Env.createEnv()) == %NumV{n: 1}
     end
 
-    test "stringC" do
-        assert Interpreter.interp(%StringC{s: "Test"}) == %StringV{s: "Test"}
+    test "StringC" do
+        assert Interpreter.interp(%StringC{s: "Test"}, Env.createEnv()) == %StringV{s: "Test"}
     end
 
-    test "+ binop" do
-        assert Interpreter.interp(%BinopC{op: :+, l: %NumC{n: 1}, r: %NumC{n: 2}}) == %NumV{n: 3}
+    test "IdC" do
+        assert Interpreter.interp(%IdC{s: :test}, %{test: %NumV{n: 1}}) == %NumV{n: 1}
+        assert Interpreter.interp(%IdC{s: :+}, Env.createEnv()) 
+        == %PrimV{op: &Interpreter.myPlus/1}
     end
 
-    test "- binop" do
-        Interpreter.interp(%BinopC{op: :-, l: %NumC{n: 1}, r: %NumC{n: 2}}) == %NumV{n: -1}
+    test "LamC" do
+        assert Interpreter.interp(%LamC{params: [:x], body: %NumC{n: 1}}, Env.createEnv()) == 
+        %ClosV{params: [:x], body: %NumC{n: 1}, env: Env.createEnv()}
     end
 
-    test "* binop" do
-        Interpreter.interp(%BinopC{op: :*, l: %NumC{n: 2}, r: %NumC{n: 2}}) == %NumV{n: -4}
+    test "+" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :+}, 
+        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %NumV{n: 3}
     end
 
-    test "/ binop" do
-        Interpreter.interp(%BinopC{op: :/, l: %NumC{n: 6}, r: %NumC{n: 2}}) == %NumV{n: 3}
+    test "-" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :-}, 
+        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %NumV{n: -1}
+    end
+
+    test "*" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :*}, 
+        args: [%NumC{n: 2}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %NumV{n: 4}
+    end
+
+    test "/" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :/}, 
+        args: [%NumC{n: 6}, %NumC{n: 3}]}, 
+        Env.createEnv()) == %NumV{n: 2}
     end
 end
