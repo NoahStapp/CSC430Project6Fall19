@@ -99,7 +99,11 @@ defmodule Env do
             +: %PrimV{op: &Interpreter.myPlus/1},
             -: %PrimV{op: &Interpreter.mySub/1},
             *: %PrimV{op: &Interpreter.myMult/1},
-            /: %PrimV{op: &Interpreter.myDiv/1}
+            /: %PrimV{op: &Interpreter.myDiv/1},
+            <=: %PrimV{op: &Interpreter.leq?/1},
+            equal?: %PrimV{op: &Interpreter.equ?/1},
+            true: %BoolV{b: true},
+            false: %BoolV{b: false}
         }
     end
 end
@@ -125,6 +129,8 @@ defmodule Interpreter do
     def myPlus(args) do   
         if length(args) == 2 do         
             %NumV{n: List.first(args).n + List.last(args).n}
+        else
+            throw "Invalid args to +"
         end
     end
 
@@ -132,6 +138,8 @@ defmodule Interpreter do
     def mySub(args) do   
         if length(args) == 2 do         
             %NumV{n: List.first(args).n - List.last(args).n}
+        else
+            throw "Invalid args to -"
         end
     end
 
@@ -139,6 +147,8 @@ defmodule Interpreter do
     def myMult(args) do   
         if length(args) == 2 do         
             %NumV{n: List.first(args).n * List.last(args).n}
+        else
+            throw "Invalid args to *"
         end
     end
 
@@ -146,6 +156,43 @@ defmodule Interpreter do
     def myDiv(args) do   
         if length(args) == 2 and List.last(args).n != 0 do         
             %NumV{n: List.first(args).n / List.last(args).n}
+        else
+            throw "Invalid args to /"
+        end
+    end
+
+    @spec leq?(list(Value)) :: Value
+    def leq?(args) do
+        if length(args) == 2 do
+            %BoolV{b: List.first(args).n <= List.last(args).n}
+        else
+            throw "Invalid args to <="
+        end
+    end
+
+    @spec equ?(list(Value)) :: Value
+    def equ?(args) do
+        if length(args) == 2 do
+            case List.first(args) do
+                %NumV{} -> 
+                    case List.last(args) do
+                        %NumV{} -> %BoolV{b: List.first(args).n == List.last(args).n}
+                        _ -> throw "Invalid equal?"
+                    end
+                %BoolV{} -> 
+                    case List.last(args) do
+                        %BoolV{} -> %BoolV{b: List.first(args).b == List.last(args).b}
+                        _ -> throw "Invalid equal?"
+                    end
+                %StringV{} -> 
+                    case List.last(args) do
+                        %StringV{} -> %BoolV{b: List.first(args).s == List.last(args).s}
+                        _ -> throw "Invalid equal?"
+                    end
+                _ -> %BoolV{b: false}
+            end
+        else
+            throw "Invalid args to equal?"
         end
     end
 end
@@ -163,6 +210,7 @@ defmodule Main do
 
     test "IdC" do
         assert Interpreter.interp(%IdC{s: :test}, %{test: %NumV{n: 1}}) == %NumV{n: 1}
+
         assert Interpreter.interp(%IdC{s: :+}, Env.createEnv()) 
         == %PrimV{op: &Interpreter.myPlus/1}
     end
@@ -170,6 +218,17 @@ defmodule Main do
     test "LamC" do
         assert Interpreter.interp(%LamC{params: [:x], body: %NumC{n: 1}}, Env.createEnv()) == 
         %ClosV{params: [:x], body: %NumC{n: 1}, env: Env.createEnv()}
+    end
+
+    test "nested primops" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :*}, 
+        args: [
+            %AppC{fun: %IdC{s: :+}, 
+                args: [%NumC{n: 1}, %NumC{n: 2}]},
+            %AppC{fun: %IdC{s: :+}, 
+                args: [%NumC{n: 1}, %NumC{n: 2}]}
+        ]}, 
+        Env.createEnv()) == %NumV{n: 9}
     end
 
     test "+" do
@@ -194,5 +253,81 @@ defmodule Main do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :/}, 
         args: [%NumC{n: 6}, %NumC{n: 3}]}, 
         Env.createEnv()) == %NumV{n: 2}
+    end
+
+    test "<=" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :<=}, 
+        args: [%NumC{n: 2}, %NumC{n: 1}]}, 
+        Env.createEnv()) == %BoolV{b: false}
+
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :<=}, 
+        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %BoolV{b: true}
+    end
+
+    test "equal? nums" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%NumC{n: 1}, %NumC{n: 1}]}, 
+        Env.createEnv()) == %BoolV{b: true}
+
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? bools" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%IdC{s: :true}, %IdC{s: :true}]}, 
+        Env.createEnv()) == %BoolV{b: true}
+
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%IdC{s: :true}, %IdC{s: :false}]}, 
+        Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? strings" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%StringC{s: "theSame"}, %StringC{s: "theSame"}]}, 
+        Env.createEnv()) == %BoolV{b: true}
+
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [%StringC{s: "theSame"}, %StringC{s: "different"}]}, 
+        Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? else" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %LamC{params: [:x], body: %NumC{n: 1}},
+            %LamC{params: [:x], body: %NumC{n: 1}}
+        ]}, 
+        Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? error" do
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %NumC{n: 1},
+            %LamC{params: [:x], body: %NumC{n: 1}}
+        ]}, 
+        Env.createEnv())
+
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %NumC{n: 1},
+            %NumC{n: 1},
+            %NumC{n: 1}
+        ]}, 
+        Env.createEnv())
+    end
+
+    test "arthimetic error" do
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :+}, 
+        args: [
+            %NumC{n: 1},
+            %NumC{n: 1},
+            %NumC{n: 1}
+        ]}, 
+        Env.createEnv())
     end
 end
