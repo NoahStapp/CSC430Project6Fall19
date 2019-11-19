@@ -210,6 +210,7 @@ defmodule Main do
 
     test "IdC" do
         assert Interpreter.interp(%IdC{s: :test}, %{test: %NumV{n: 1}}) == %NumV{n: 1}
+
         assert Interpreter.interp(%IdC{s: :+}, Env.createEnv()) 
         == %PrimV{op: &Interpreter.myPlus/1}
     end
@@ -219,13 +220,7 @@ defmodule Main do
         %ClosV{params: [:x], body: %NumC{n: 1}, env: Env.createEnv()}
     end
 
-    test "+" do
-        assert Interpreter.interp(%AppC{fun: %IdC{s: :+}, 
-        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
-        Env.createEnv()) == %NumV{n: 3}
-    end
-
-    test "nested primVs" do
+    test "nested primops" do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :*}, 
         args: [
             %AppC{fun: %IdC{s: :+}, 
@@ -234,6 +229,12 @@ defmodule Main do
                 args: [%NumC{n: 1}, %NumC{n: 2}]}
         ]}, 
         Env.createEnv()) == %NumV{n: 9}
+    end
+
+    test "+" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :+}, 
+        args: [%NumC{n: 1}, %NumC{n: 2}]}, 
+        Env.createEnv()) == %NumV{n: 3}
     end
 
     test "-" do
@@ -258,6 +259,7 @@ defmodule Main do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :<=}, 
         args: [%NumC{n: 2}, %NumC{n: 1}]}, 
         Env.createEnv()) == %BoolV{b: false}
+
         assert Interpreter.interp(%AppC{fun: %IdC{s: :<=}, 
         args: [%NumC{n: 1}, %NumC{n: 2}]}, 
         Env.createEnv()) == %BoolV{b: true}
@@ -267,6 +269,7 @@ defmodule Main do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%NumC{n: 1}, %NumC{n: 1}]}, 
         Env.createEnv()) == %BoolV{b: true}
+
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%NumC{n: 1}, %NumC{n: 2}]}, 
         Env.createEnv()) == %BoolV{b: false}
@@ -276,6 +279,7 @@ defmodule Main do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%IdC{s: :true}, %IdC{s: :true}]}, 
         Env.createEnv()) == %BoolV{b: true}
+
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%IdC{s: :true}, %IdC{s: :false}]}, 
         Env.createEnv()) == %BoolV{b: false}
@@ -285,8 +289,45 @@ defmodule Main do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%StringC{s: "theSame"}, %StringC{s: "theSame"}]}, 
         Env.createEnv()) == %BoolV{b: true}
+
         assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
         args: [%StringC{s: "theSame"}, %StringC{s: "different"}]}, 
         Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? else" do
+        assert Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %LamC{params: [:x], body: %NumC{n: 1}},
+            %LamC{params: [:x], body: %NumC{n: 1}}
+        ]}, 
+        Env.createEnv()) == %BoolV{b: false}
+    end
+
+    test "equal? error" do
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %NumC{n: 1},
+            %LamC{params: [:x], body: %NumC{n: 1}}
+        ]}, 
+        Env.createEnv())
+
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :equal?}, 
+        args: [
+            %NumC{n: 1},
+            %NumC{n: 1},
+            %NumC{n: 1}
+        ]}, 
+        Env.createEnv())
+    end
+
+    test "arthimetic error" do
+        catch_throw Interpreter.interp(%AppC{fun: %IdC{s: :+}, 
+        args: [
+            %NumC{n: 1},
+            %NumC{n: 1},
+            %NumC{n: 1}
+        ]}, 
+        Env.createEnv())
     end
 end
