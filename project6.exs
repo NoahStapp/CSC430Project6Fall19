@@ -132,13 +132,13 @@ defmodule Interpreter do
                     %PrimV{} -> fd.op.(Enum.map(expression.args, fn arg -> interp(arg, env) end))
                     %ClosV{} ->
                         env2 = evaluate(env, fd.env, fd.params, expression.args)
-                        interp(expression.body, env2)
+                        interp(fd.body, env2)
                 end
-            _ -> throw "Invalid expression"
+            _ -> throw IO.puts expression
         end
     end
 
-    @spec evaluate(Env, Env, list(atom), list(Value)) :: Env
+    @spec evaluate(Env, Env, list(atom), list(ExprC)) :: Env
     def evaluate(env, cenv, parms, actual) do
         cond do
             length(parms) == 0 ->
@@ -148,10 +148,7 @@ defmodule Interpreter do
                 end
             length(actual) == 0 -> throw "Not enough args given"
             true ->
-                Map.put(cenv, parms[0] => interp(actual[0], env))
-                delete_at(actual, 0)
-                delete_at(parms, 0)
-                evaluate(env, cenv, actual, parms)
+                evaluate(env, Map.put(cenv, List.first(parms), interp(List.first(actual), env)), List.delete_at(actual, 0), List.delete_at(parms, 0))
         end
     end
 
@@ -253,9 +250,8 @@ defmodule Main do
 
     test "appC - closure" do
         assert Interpreter.interp(%AppC{
-            fun: %LamC{params: [:x], body: %AppC{fun: %IdC{s: :*} args: [%NumC{n: 3}, %IdC{s: :x}]}, Env.createEnv()} 
-            args:%NumC{7}}}, Env.createEnv()) == 
-        %NumV{n : 21}
+            fun: %LamC{params: [:x], body: %AppC{fun: %IdC{s: :*}, args: [%NumC{n: 3}, %IdC{s: :x}]}},
+            args: [%NumC{n: 7}]}, Env.createEnv()) == %NumV{n: 21}
     end
     
     test "IfC" do
