@@ -117,13 +117,14 @@ defmodule Interpreter do
             %IdC{} -> env[expression.s]
             %LamC{} -> %ClosV{params: expression.params, body: expression.body, env: env}
             %IfC{} -> 
-                fd = interp(expression.test, env)
-                case fd do
-                    %BoolV{} -> test = fd.b
-                            case test do
-                                true -> interp(expression.then, env)
-                                false -> interp(expression.else, env)
-                            end
+                test = interp(expression.test, env)
+                case test do
+                    %BoolV{} -> if test.b do
+                                    interp(expression.then, env)
+                                else
+                                    interp(expression.else, env)
+                                end
+                    _ -> throw "Non-boolean test condition"
                 end
             %AppC{} -> 
                 fd = interp(expression.fun, env)
