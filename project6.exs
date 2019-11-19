@@ -116,6 +116,15 @@ defmodule Interpreter do
             %StringC{} -> %StringV{s: expression.s}
             %IdC{} -> env[expression.s]
             %LamC{} -> %ClosV{params: expression.params, body: expression.body, env: env}
+            %IfC{} -> 
+                fd = interp(expression.test, env)
+                case fd do
+                    %BoolV{} -> test = fd.b
+                            case test do
+                                true -> interp(expression.then, env)
+                                false -> interp(expression.else, env)
+                            end
+                end
             %AppC{} -> 
                 fd = interp(expression.fun, env)
                 case fd do
@@ -216,10 +225,18 @@ defmodule Main do
     end
 
     test "LamC" do
-        assert Interpreter.interp(%LamC{params: [:x], body: %NumC{n: 1}}, Env.createEnv()) == 
+        assert Interpreter.interp(%LamC{params: [:x], body: %NumC{n: 1}},
+         Env.createEnv()) == 
         %ClosV{params: [:x], body: %NumC{n: 1}, env: Env.createEnv()}
     end
 
+    test "IfC" do
+        assert Interpreter.interp(%IfC{test: %IdC{s: :true}, then: %NumC{n: 1}, else: %NumC{n: 2}},
+         Env.createEnv()) == %NumV{n: 1}
+        assert Interpreter.interp(%IfC{test: %IdC{s: :false}, then: %NumC{n: 1}, else: %NumC{n: 2}},
+         Env.createEnv()) == %NumV{n: 2}
+    end
+         
     test "nested primops" do
         assert Interpreter.interp(%AppC{fun: %IdC{s: :*}, 
         args: [
